@@ -12,8 +12,8 @@ NY = ZoneInfo("America/New_York")
 
 
 def in_window(now):
-    """Mon-Fri, 8:30 AM to 2:15 PM New York time (15 min grace, GitHub often starts runs late)."""
-    return now.weekday() < 5 and time(8, 30) <= now.time() <= time(14, 15)
+    """Mon-Fri, 8:30 AM to 4:00 PM New York time (15 min grace, GitHub often starts runs late)."""
+    return now.weekday() < 5 and time(8, 30) <= now.time() <= time(16, 15)
 
 
 def gap_if_match(info):
@@ -46,9 +46,13 @@ def catalyst(ticker):
     return (item.get("content") or item).get("title", "No news found")
 
 
-def format_report(rows):
+def format_report(rows, stats=None):
     lines = [f"{r['ticker']} | ${r['price']:.2f} | +{r['gap_percent']:.2f}% | {r['catalyst']}" for r in rows]
-    return "[Scanner A: Pre-market Gappers]\n" + ("\n".join(lines) or "No stock match.")
+    text = "[Scanner A: Pre-market Gappers]\n" + ("\n".join(lines) or "No stock match.")
+    if stats:  # diagnostic line, remove once the scan is trusted
+        text += (f"\n(checked {stats['checked']} | no pre-market price {stats['no_price']} | "
+                 f"failed gap/price {stats['gap']} | failed volume {stats['volume']} | errors {stats['errors']})")
+    return text
 
 
 def send_telegram(text):
@@ -69,16 +73,24 @@ def main():
     # shortcut: candidates from Yahoo day_gainers + most_actives can miss pre-market movers, upgrade to a full pre-market list when one is available
     symbols = {q["symbol"] for name in ("day_gainers", "most_actives") for q in yf.screen(name, count=100)["quotes"]}
     rows = []
+    stats = {"checked": len(symbols), "no_price": 0, "gap": 0, "volume": 0, "errors": 0}
     for sym in sorted(symbols):
         try:
             t = yf.Ticker(sym)
             info = t.info
+            if not (info.get("preMarketPrice") and info.get("previousClose")):
+                stats["no_price"] += 1
+                continue
             gap = gap_if_match(info)
             if gap is None:
+                stats["gap"] += 1
                 continue  # skip the slower volume lookup for stocks that already fail
-            if volume_ok(premarket_volume(t, today)):
-                rows.append({"ticker": sym, "price": info["preMarketPrice"], "gap_percent": gap, "catalyst": catalyst(t)})
+            if not volume_ok(premarket_volume(t, today)):
+                stats["volume"] += 1
+                continue
+            rows.append({"ticker": sym, "price": info["preMarketPrice"], "gap_percent": gap, "catalyst": catalyst(t)})
         except Exception as e:
+            stats["errors"] += 1
             print(f"skip {sym}: {e}")
     rows.sort(key=lambda r: r["gap_percent"], reverse=True)
 
@@ -93,7 +105,7 @@ def main():
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
-    report = format_report(rows)
+    report = format_report(rows, stats)
     print(report)
     send_telegram(report)
 
