@@ -7,8 +7,8 @@ from scanner import NY, OUT_DIR, send_telegram
 
 
 def in_window_b(now):
-    """Mon-Fri, 8:35 AM to 3:00 PM New York time."""
-    return now.weekday() < 5 and time(8, 35) <= now.time() <= time(15, 0)
+    """Mon-Fri, 8:35 AM to 4:00 PM New York time."""
+    return now.weekday() < 5 and time(8, 35) <= now.time() <= time(16, 0)
 
 
 def tickers_from(data):
