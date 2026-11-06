@@ -17,21 +17,23 @@ assert gap_if_match({}) is None                                              # n
 assert volume_ok(50_001)
 assert not volume_ok(50_000)                                                 # must be over 50,000
 
-# Scanner A: time window (Mon-Fri, 8:30 AM to 2:15 PM New York)
+# Scanner A: time window (Mon-Fri, 8:30 AM to 4:15 PM New York)
 assert in_window(datetime(2026, 11, 3, 8, 30, tzinfo=ny))
 assert in_window(datetime(2026, 11, 3, 14, 0, tzinfo=ny))
 assert not in_window(datetime(2026, 11, 3, 8, 0, tzinfo=ny))
-assert not in_window(datetime(2026, 11, 3, 14, 30, tzinfo=ny))
+assert in_window(datetime(2026, 11, 3, 16, 10, tzinfo=ny))
+assert not in_window(datetime(2026, 11, 3, 16, 30, tzinfo=ny))
 assert not in_window(datetime(2026, 11, 7, 10, 0, tzinfo=ny))                # Saturday
 
 row = {"ticker": "ABC", "price": 10.6, "gap_percent": 6.0, "catalyst": "ABC wins deal"}
 assert format_report([row]) == "[Scanner A: Pre-market Gappers]\nABC | $10.60 | +6.00% | ABC wins deal"
 assert format_report([]) == "[Scanner A: Pre-market Gappers]\nNo stock match."
 
-# Scanner B: time window (Mon-Fri, 8:35 AM to 3:00 PM New York)
+# Scanner B: time window (Mon-Fri, 8:35 AM to 4:00 PM New York)
 assert in_window_b(datetime(2026, 11, 3, 8, 35, tzinfo=ny))
 assert in_window_b(datetime(2026, 11, 3, 14, 35, tzinfo=ny))
-assert not in_window_b(datetime(2026, 11, 3, 15, 5, tzinfo=ny))
+assert in_window_b(datetime(2026, 11, 3, 15, 35, tzinfo=ny))
+assert not in_window_b(datetime(2026, 11, 3, 16, 5, tzinfo=ny))
 assert not in_window_b(datetime(2026, 11, 3, 8, 5, tzinfo=ny))
 assert not in_window_b(datetime(2026, 11, 7, 10, 5, tzinfo=ny))              # Saturday
 
