@@ -26,11 +26,12 @@ def gap_if_match(info):
 
 
 def premarket_volume(t, today):
-    """Shares traded before 9:30 AM New York today, summed from 1-minute bars."""
+    """(Shares traded before 9:30 AM New York today, number of 1-minute bars), from 1-minute bars."""
     # shortcut: 1-minute bars instead of info["preMarketVolume"] (field name not verified), switch once the field is confirmed
     m = t.history(period="2d", interval="1m", prepost=True)
     m = m[m.index.date == today]
-    return float(m.between_time("00:00", "09:29")["Volume"].sum())
+    pm = m.between_time("00:00", "09:29")["Volume"]
+    return float(pm.sum()), len(pm)
 
 
 def volume_ok(vol):
@@ -52,6 +53,8 @@ def format_report(rows, stats=None):
     if stats:  # diagnostic line, remove once the scan is trusted
         text += (f"\n(checked {stats['checked']} | no pre-market price {stats['no_price']} | "
                  f"failed gap/price {stats['gap']} | failed volume {stats['volume']} | errors {stats['errors']})")
+        if stats.get("samples"):
+            text += "\nvolume examples: " + "; ".join(stats["samples"])
     return text
 
 
@@ -73,7 +76,7 @@ def main():
     # shortcut: candidates from Yahoo day_gainers + most_actives can miss pre-market movers, upgrade to a full pre-market list when one is available
     symbols = {q["symbol"] for name in ("day_gainers", "most_actives") for q in yf.screen(name, count=100)["quotes"]}
     rows = []
-    stats = {"checked": len(symbols), "no_price": 0, "gap": 0, "volume": 0, "errors": 0}
+    stats = {"checked": len(symbols), "no_price": 0, "gap": 0, "volume": 0, "errors": 0, "samples": []}
     for sym in sorted(symbols):
         try:
             t = yf.Ticker(sym)
@@ -85,8 +88,11 @@ def main():
             if gap is None:
                 stats["gap"] += 1
                 continue  # skip the slower volume lookup for stocks that already fail
-            if not volume_ok(premarket_volume(t, today)):
+            vol, bars = premarket_volume(t, today)
+            if not volume_ok(vol):
                 stats["volume"] += 1
+                if len(stats["samples"]) < 3:  # diagnostic: real volume of first 3 that failed
+                    stats["samples"].append(f"{sym} vol {vol:,.0f} in {bars} bars")
                 continue
             rows.append({"ticker": sym, "price": info["preMarketPrice"], "gap_percent": gap, "catalyst": catalyst(t)})
         except Exception as e:
